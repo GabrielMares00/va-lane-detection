@@ -1,6 +1,10 @@
+import pickle
 import cv2
 import math
+import matplotlib as mpl
 from matplotlib.pyplot import gray
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 import numpy as np
 
@@ -13,18 +17,14 @@ lastBestKnownNegSlope = [-1, -1]
 def grayscale(img):
     return cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
-
 def to_hsv(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
 
 def canny(img, low_threshold, high_threshold):
     return cv2.Canny(img, low_threshold, high_threshold)
 
-
 def gaussian_blur(img, kernel_size):
     return cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)
-
 
 def region_of_interest(img, vertices):
     """
@@ -135,8 +135,7 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=10):
     #    plt.imshow(img)  #For debug
     cv2.line(img, (int(rightbx), int(rightby)),
              (int(righttx), int(rightty)), color, thickness)
-
-#    plt.imshow(img)  #For debug
+    # plt.imshow(img)  #For debug
 
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap, img2):
@@ -161,8 +160,17 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap, img2):
 def weighted_img(img, initial_img, a=0.8, b=1., c=0.):
     return cv2.addWeighted(initial_img, a, img, b, c)
 
-
 def process_static_image(image):
+    # import Camera Calibration Parameters
+    dist_pickle = "wide_dist_pickle.p"
+    with open(dist_pickle, mode="rb") as f:
+        CalData = pickle.load(f)
+    mtx, dist = CalData["mtx"], CalData["dist"]
+    # undistort image for better accuracy
+    undist_img = cv2.undistort(image, mtx, dist, None, mtx)
+    # Stil confused if it worked
+    image = undist_img
+
     gray = grayscale(image)
 
     # define a kernel size and apply Gaussian smoothing
@@ -194,16 +202,13 @@ def process_static_image(image):
     hough_lines_img = hough_lines(
         masked_edges, rho, theta, threshold, min_line_len, max_line_gap, img)
     line_marked_img = weighted_img(hough_lines_img, image)
-
     return line_marked_img
-
 
 def video_init():
     output = 'lane_detect_output\\processedVideo.mp4'
-    to_be_processed_video = VideoFileClip("roadlaneimg\\video2.webm")
+    to_be_processed_video = VideoFileClip("roadlaneimg\\video4.mp4")
     clip = to_be_processed_video.fl_image(process_static_image)
     clip.write_videofile(output, audio=False)
-    
     
 
 video_init()
