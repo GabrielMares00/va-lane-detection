@@ -1,10 +1,13 @@
 import cv2
 import math
+from matplotlib.pyplot import gray
 
-import numpy
 import numpy as np
 
 from moviepy.editor import VideoFileClip
+
+lastBestKnownPosSlope = [1, 1]
+lastBestKnownNegSlope = [-1, -1]
 
 
 def grayscale(img):
@@ -46,7 +49,7 @@ def region_of_interest(img, vertices):
     # returning the image only where mask pixels are nonzero
     masked_image = cv2.bitwise_and(img, mask)
 
-    return masked_image
+    return masked_image, img
 
 
 def draw_lines(img, lines, color=[255, 0, 0], thickness=10):
@@ -63,17 +66,17 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=10):
             # Find the Slope ((y2-y1)/(x2-x1))
             # If slope > 0, it should be the right lane line & if slope < 0, it should be left lane
             slope = ((y2 - y1) / (x2 - x1))
-            if 0.85 > slope > 0.45:
+            if 0.85 > slope > 0.55:
                 if not math.isnan(x1) or math.isnan(y1) or math.isnan(x2) or math.isnan(y2):
                     posSlopePoints.append([x1, y1])
                     posSlopePoints.append([x2, y2])
-            elif -0.85 < slope < -0.45:
+            elif -0.80 < slope < -0.5:
                 if not math.isnan(x1) or math.isnan(y1) or math.isnan(x2) or math.isnan(y2):
                     negSlopePoints.append([x1, y1])
                     negSlopePoints.append([x2, y2])
 
-    print("Positive slope line points: ", posSlopePoints)
-    print("Negative slope line points: ", negSlopePoints)
+    # print("Positive slope line points: ", posSlopePoints)
+    # print("Negative slope line points: ", negSlopePoints)
 
     posSlopeXs = []
     posSlopeYs = []
@@ -88,42 +91,55 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=10):
     try:
         # Get the best line fit through the available points and store the slope & intercept of this line for both left & right lanes
         bestPosLineFitSlopeInt = np.polyfit(posSlopeXs, posSlopeYs, 1)
-        lastBestKnownPosSlope = bestPosLineFitSlopeInt
     except Exception as e:
-        bestPosLineFitSlopeInt = lastBestKnownPosSlope
-
+        if lastBestKnownPosSlope is not None:
+            bestPosLineFitSlopeInt = lastBestKnownPosSlope
+        else:
+            bestPosLineFitSlopeInt = [0, 0]
     try:
         bestNegLineFitSlopeInt = np.polyfit(negSlopeXs, negSlopeYs, 1)
-        lastBestKnownNegSlope = bestNegLineFitSlopeInt
     except Exception as e:
-        bestNegLineFitSlopeInt = lastBestKnownNegSlope
+
+        if lastBestKnownNegSlope is not None:
+            bestNegLineFitSlopeInt = lastBestKnownNegSlope
+        else:
+            bestNegLineFitSlopeInt = [0, 0]
+
+    lastBestKnownPosSlope = bestPosLineFitSlopeInt
+    lastBestKnownNegSlope = bestNegLineFitSlopeInt
 
     # Once we have line which is the best available fit through all the lines, extend this line to the ROI mask edges
     # Extended Left lane line bottom co-ordinates
     leftby = imgheight  # Y coordinate from ROI mask
-    leftbx = (leftby - bestNegLineFitSlopeInt[1]) / bestNegLineFitSlopeInt[0]  # X coordinate = (y-c)/m
+    # X coordinate = (y-c)/m
+    leftbx = (leftby - bestNegLineFitSlopeInt[1]) / bestNegLineFitSlopeInt[0]
 
     # Extended Left lane line top co-ordinates
     leftty = 0.62 * imgheight  # Y coordinate from ROI mask
-    lefttx = (leftty - bestNegLineFitSlopeInt[1]) / bestNegLineFitSlopeInt[0]  # X coordinate = (y-c)/m
+    # X coordinate = (y-c)/m
+    lefttx = (leftty - bestNegLineFitSlopeInt[1]) / bestNegLineFitSlopeInt[0]
 
     # Extended right lane line bottom co-ordinates
     rightby = imgheight  # Y coordinate from ROI mask
-    rightbx = (rightby - bestPosLineFitSlopeInt[1]) / bestPosLineFitSlopeInt[0]  # X coordinate = (y-c)/m
+    # X coordinate = (y-c)/m
+    rightbx = (rightby - bestPosLineFitSlopeInt[1]) / bestPosLineFitSlopeInt[0]
 
     # Extended right lane line top co-ordinates
     rightty = 0.62 * imgheight  # Y coordinate from ROI mask
-    righttx = (rightty - bestPosLineFitSlopeInt[1]) / bestPosLineFitSlopeInt[0]  # X coordinate = (y-c)/m
+    # X coordinate = (y-c)/m
+    righttx = (rightty - bestPosLineFitSlopeInt[1]) / bestPosLineFitSlopeInt[0]
 
-    cv2.line(img, (int(leftbx), int(leftby)), (int(lefttx), int(leftty)), color, thickness)
+    cv2.line(img, (int(leftbx), int(leftby)),
+             (int(lefttx), int(leftty)), color, thickness)
     #    plt.figure()
     #    plt.imshow(img)  #For debug
-    cv2.line(img, (int(rightbx), int(rightby)), (int(righttx), int(rightty)), color, thickness)
+    cv2.line(img, (int(rightbx), int(rightby)),
+             (int(righttx), int(rightty)), color, thickness)
 
 #    plt.imshow(img)  #For debug
 
 
-def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
+def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap, img2):
     """
     `img` should be the output of a Canny transform.
 
@@ -131,6 +147,12 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
     """
     lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]), minLineLength=min_line_len,
                             maxLineGap=max_line_gap)
+    # print(lines)
+    if lines is None:
+        # cv2.imshow("Hough Lines",img)
+        # cv2.imshow("Original Image",img2)
+        # cv2.waitKey(0)
+        lines = []
     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
     draw_lines(line_img, lines)
     return line_img
@@ -160,7 +182,7 @@ def process_static_image(image):
     imgwidth = image.shape[1]
     vertices = np.array([[(0.05 * imgwidth, imgheight), (0.48 * imgwidth, 0.62 * imgheight),
                           (0.55 * imgwidth, 0.62 * imgheight), (0.95 * imgwidth, imgheight)]], dtype=np.int32)
-    masked_edges = region_of_interest(edges, vertices)
+    masked_edges, img = region_of_interest(edges, vertices)
 
     # define the Hough transform parameters
     rho = 2
@@ -169,18 +191,19 @@ def process_static_image(image):
     min_line_len = 10
     max_line_gap = 50
 
-    hough_lines_img = hough_lines(masked_edges, rho, theta, threshold, min_line_len, max_line_gap)
+    hough_lines_img = hough_lines(
+        masked_edges, rho, theta, threshold, min_line_len, max_line_gap, img)
     line_marked_img = weighted_img(hough_lines_img, image)
 
     return line_marked_img
 
 
 def video_init():
-    output = 'processedVideo.mp4'
-    to_be_processed_video = VideoFileClip("video3.webm")
-
+    output = 'lane_detect_output\\processedVideo.mp4'
+    to_be_processed_video = VideoFileClip("roadlaneimg\\video2.webm")
     clip = to_be_processed_video.fl_image(process_static_image)
     clip.write_videofile(output, audio=False)
-
+    
+    
 
 video_init()
