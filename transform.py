@@ -52,7 +52,6 @@ pickle.dump( dist_pickle, open( "./wide_dist_pickle.p", "wb" ) )
 #dst = cv2.cvtColor(dst, cv2.COLOR_BGR2RGB)
 # Visualize undistortion
 
-# Nu merge plt show
 f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12,7))
 ax1.imshow(img, cmap='gray')
 ax1.set_title('Original Image', fontsize=30)

@@ -35,7 +35,7 @@ def region_of_interest(img, vertices):
     """
     # defining a blank mask to start with
     mask = np.zeros_like(img)
-
+    
     # defining a 3 channel or 1 channel color to fill the mask with depending on the input image
     if len(img.shape) > 2:
         channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
@@ -168,8 +168,8 @@ def process_static_image(image):
     mtx, dist = CalData["mtx"], CalData["dist"]
     # undistort image for better accuracy
     undist_img = cv2.undistort(image, mtx, dist, None, mtx)
-    # Stil confused if it worked
-    image = undist_img
+    # Better accuracy at some videos, worse at the rest
+    # image = undist_img
 
     gray = grayscale(image)
 
@@ -201,12 +201,13 @@ def process_static_image(image):
 
     hough_lines_img = hough_lines(
         masked_edges, rho, theta, threshold, min_line_len, max_line_gap, img)
+
     line_marked_img = weighted_img(hough_lines_img, image)
     return line_marked_img
 
 def video_init():
     output = 'lane_detect_output\\processedVideo.mp4'
-    to_be_processed_video = VideoFileClip("roadlaneimg\\video4.mp4")
+    to_be_processed_video = VideoFileClip("roadlaneimg\\video3.webm")
     clip = to_be_processed_video.fl_image(process_static_image)
     clip.write_videofile(output, audio=False)
     
